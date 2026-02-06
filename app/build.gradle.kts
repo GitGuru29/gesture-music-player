@@ -59,6 +59,9 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.palette.ktx)
     implementation(libs.androidx.material.icons.extended)
+    // Network
+    implementation(libs.okhttp)
+    implementation(libs.gson)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

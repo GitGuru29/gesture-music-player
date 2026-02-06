@@ -8,34 +8,80 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import com.example.musicplayer.data.AudioFile
-import com.example.musicplayer.data.AudioRepository
+import com.example.musicplayer.data.*
 import com.example.musicplayer.service.PlaybackService
 import androidx.compose.ui.graphics.Color
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+
+// Tab options
+enum class LibraryTab {
+    ALL, FAVORITES
+}
 
 data class MusicState(
     val currentSong: AudioFile? = null,
     val isPlaying: Boolean = false,
     val playlist: List<AudioFile> = emptyList(),
     val currentPosition: Long = 0L,
-    val duration: Long = 1L, // Prevent div by zero
+    val duration: Long = 1L,
     val isShuffleEnabled: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
-    val paletteColors: Map<String, Color> = emptyMap()
+    val paletteColors: Map<String, Color> = emptyMap(),
+    // New state
+    val searchQuery: String = "",
+    val selectedTab: LibraryTab = LibraryTab.ALL,
+    val favoriteIds: Set<Long> = emptySet(),
+    val isSearchActive: Boolean = false
+)
+
+// Downloader state
+data class DownloaderState(
+    val searchQuery: String = "",
+    val searchResults: List<YouTubeSearchResult> = emptyList(),
+    val isSearching: Boolean = false,
+    val downloadState: DownloadState = DownloadState.Idle
 )
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = AudioRepository(application)
-    private var player: Player? = null // Now generic Player interface from Media3
+    private val audioRepository = AudioRepository(application)
+    private val favoritesRepository = FavoritesRepository(application)
+    private val downloadRepository = DownloadRepository(application)
+    
+    private var player: Player? = null
     
     private val _uiState = MutableStateFlow(MusicState())
     val uiState: StateFlow<MusicState> = _uiState.asStateFlow()
+    
+    private val _downloaderState = MutableStateFlow(DownloaderState())
+    val downloaderState: StateFlow<DownloaderState> = _downloaderState.asStateFlow()
+    
+    // Filtered playlist based on search and tab
+    val filteredPlaylist: StateFlow<List<AudioFile>> = combine(
+        _uiState.map { it.playlist },
+        _uiState.map { it.searchQuery },
+        _uiState.map { it.selectedTab },
+        _uiState.map { it.favoriteIds }
+    ) { playlist, query, tab, favoriteIds ->
+        var filtered = playlist
+        
+        // Filter by tab
+        filtered = when (tab) {
+            LibraryTab.ALL -> filtered
+            LibraryTab.FAVORITES -> filtered.filter { it.id in favoriteIds }
+        }
+        
+        // Filter by search query
+        if (query.isNotBlank()) {
+            filtered = filtered.filter { song ->
+                song.title.contains(query, ignoreCase = true) ||
+                song.artist.contains(query, ignoreCase = true)
+            }
+        }
+        
+        filtered
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     init {
         // Bind to Service
@@ -44,18 +90,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         
         controllerFuture.addListener({
             try {
-                // Connection successful
                 val p = controllerFuture.get()
                 player = p
                 
-                // Setup Listener on the Controller
                 p.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         _uiState.update { it.copy(isPlaying = isPlaying) }
                     }
 
                     override fun onPlaybackStateChanged(playbackState: Int) {
-                         if (playbackState == Player.STATE_READY) {
+                        if (playbackState == Player.STATE_READY) {
                             _uiState.update { it.copy(duration = p.duration.coerceAtLeast(1L)) }
                         }
                     }
@@ -74,7 +118,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 })
                 
-                // sync initial state
                 _uiState.update { 
                     it.copy(
                         isPlaying = p.isPlaying,
@@ -84,35 +127,104 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 updateCurrentSong()
-                
                 loadAudioFiles()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }, androidx.core.content.ContextCompat.getMainExecutor(application))
         
-        // Timer loop for progress
+        // Position update timer
         viewModelScope.launch {
             while (true) {
                 if (player?.isPlaying == true) {
-                     _uiState.update { it.copy(currentPosition = player?.currentPosition ?: 0L) }
+                    _uiState.update { it.copy(currentPosition = player?.currentPosition ?: 0L) }
                 }
                 kotlinx.coroutines.delay(50L)
             }
         }
+        
+        // Observe favorites
+        viewModelScope.launch {
+            favoritesRepository.getAllFavoriteIds().collect { ids ->
+                _uiState.update { it.copy(favoriteIds = ids) }
+            }
+        }
+        
+        // Observe download state
+        viewModelScope.launch {
+            downloadRepository.downloadState.collect { state ->
+                _downloaderState.update { it.copy(downloadState = state) }
+                // Refresh library on successful download
+                if (state is DownloadState.Success) {
+                    kotlinx.coroutines.delay(1000)
+                    loadAudioFiles()
+                }
+            }
+        }
     }
     
+    // Search
+    fun setSearchQuery(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+    }
+    
+    fun toggleSearch() {
+        _uiState.update { 
+            it.copy(
+                isSearchActive = !it.isSearchActive,
+                searchQuery = if (it.isSearchActive) "" else it.searchQuery
+            ) 
+        }
+    }
+    
+    // Tabs
+    fun selectTab(tab: LibraryTab) {
+        _uiState.update { it.copy(selectedTab = tab) }
+    }
+    
+    // Favorites
+    fun toggleFavorite(songId: Long) {
+        favoritesRepository.toggleFavorite(songId)
+    }
+    
+    fun isFavorite(songId: Long): Boolean {
+        return favoritesRepository.isFavorite(songId)
+    }
+    
+    // YouTube Search
+    fun searchYouTube(query: String) {
+        _downloaderState.update { it.copy(searchQuery = query, isSearching = true) }
+        viewModelScope.launch {
+            val results = downloadRepository.searchYouTube(query)
+            _downloaderState.update { it.copy(searchResults = results, isSearching = false) }
+        }
+    }
+    
+    fun clearYouTubeSearch() {
+        _downloaderState.update { it.copy(searchQuery = "", searchResults = emptyList()) }
+    }
+    
+    // Download
+    fun downloadSong(result: YouTubeSearchResult) {
+        viewModelScope.launch {
+            downloadRepository.downloadAudio(result.videoId, result.title)
+        }
+    }
+    
+    fun resetDownloadState() {
+        downloadRepository.resetDownloadState()
+    }
+    
+    // Existing methods
     private fun updateCurrentSong() {
         val p = player ?: return
         val currentMediaItemIndex = p.currentMediaItemIndex
         val playlist = _uiState.value.playlist
         
-        // Note: Controller might not have the full playlist "objects", only MediaItems.
-        // But we sync via index if the playlist hasn't changed structure.
         if (currentMediaItemIndex in playlist.indices) {
             val song = playlist[currentMediaItemIndex]
             if (song.id != _uiState.value.currentSong?.id) {
-                 extractColors(song)
+                extractColors(song)
             }
             _uiState.update { it.copy(currentSong = song) }
         }
@@ -125,13 +237,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update { it.copy(paletteColors = colors) }
             }
         } else {
-             _uiState.update { it.copy(paletteColors = emptyMap()) }
+            _uiState.update { it.copy(paletteColors = emptyMap()) }
         }
     }
 
-    private fun loadAudioFiles() {
+    fun loadAudioFiles() {
         viewModelScope.launch {
-            val files = repository.getAudioFiles()
+            val files = audioRepository.getAudioFiles()
             if (files.isNotEmpty()) {
                 _uiState.update { it.copy(playlist = files) }
                 setupPlayer(files)
@@ -141,7 +253,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun setupPlayer(files: List<AudioFile>) {
         val p = player ?: return
-        // Only set items if player is empty to avoid resetting on rotation/service reconnect
         if (p.mediaItemCount == 0) {
             p.clearMediaItems()
             files.forEach { file ->
@@ -150,7 +261,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
             p.prepare()
             if (files.isNotEmpty()) {
-                 updateCurrentSong()
+                updateCurrentSong()
             }
         }
     }
@@ -167,27 +278,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playPause() {
         val p = player ?: return
-        if (p.isPlaying) {
-            p.pause()
-        } else {
-            p.play()
-        }
+        if (p.isPlaying) p.pause() else p.play()
     }
 
     fun next() {
         val p = player ?: return
-        if (p.hasNextMediaItem()) {
-            p.seekToNextMediaItem()
-        }
+        if (p.hasNextMediaItem()) p.seekToNextMediaItem()
     }
 
     fun previous() {
         val p = player ?: return
-        if (p.hasPreviousMediaItem()) {
-            p.seekToPreviousMediaItem()
-        } else {
-             p.seekTo(0)
-        }
+        if (p.hasPreviousMediaItem()) p.seekToPreviousMediaItem()
+        else p.seekTo(0)
     }
 
     fun seekTo(position: Long) {
@@ -201,7 +303,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     
     fun toggleRepeat() {
         val p = player ?: return
-        // OFF -> ONE -> ALL -> OFF
         val newMode = when (p.repeatMode) {
             Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
             Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL

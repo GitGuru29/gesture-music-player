@@ -3,11 +3,19 @@ import androidx.compose.ui.draw.shadow
 
 import android.Manifest
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,12 +23,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -35,11 +46,13 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.MusicNote
 import com.google.accompanist.permissions.*
 
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.camera.core.ImageAnalysis
 import androidx.compose.ui.platform.LocalContext
+import com.example.musicplayer.ui.theme.*
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -56,8 +69,7 @@ fun MusicPlayerScreen(
         permission = Manifest.permission.CAMERA
     )
     
-     // Audio permission handling logic (simplified for brevity, keeping existing flow is better but merging for clarity)
-     // We need both Audio and Camera.
+     // Audio permission handling logic
      val audioPermissionState = rememberPermissionState(
         permission = if (Build.VERSION.SDK_INT >= 33) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -128,7 +140,6 @@ fun MusicPlayerScreen(
 
                 try {
                     cameraProvider.unbindAll()
-                     // Bind Analysis only. We don't need Preview for analysis to work on most devices.
                     cameraProvider.bindToLifecycle(
                         lifecycleOwner,
                         cameraSelector,
@@ -153,59 +164,103 @@ fun MusicPlayerScreen(
             MusicPlayerContent(state, viewModel, onBack)
             
             // Gesture Feedback Overlay
-            androidx.compose.animation.AnimatedVisibility(
+            AnimatedVisibility(
                 visible = gestureFeedback != null,
-                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
-                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
                 modifier = Modifier.align(Alignment.Center)
             ) {
                 Box(
                     modifier = Modifier
                         .size(120.dp)
-                        .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.Black.copy(alpha = 0.85f))
+                        .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(24.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = gestureFeedback ?: "",
                         color = Color.White,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
 
-            if (!permissionState.status.isGranted) {
-                Text(
-                    text = "⚠ Camera needed for Air Gestures",
-                    color = Color.Red,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 40.dp)
-                        .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                        .padding(8.dp)
-                        .clickable { permissionState.launchPermissionRequest() }
-                )
+            // Camera permission hint
+            AnimatedVisibility(
+                visible = !permissionState.status.isGranted,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 60.dp)
+            ) {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.8f)),
+                    modifier = Modifier.clickable { permissionState.launchPermissionRequest() }
+                ) {
+                    Text(
+                        text = "✋ Tap to enable Air Gestures",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
+                }
             }
         }
     } else {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-             Text("Please grant permissions")
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(DarkBackground),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = AccentPrimary
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Grant permissions to continue",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
         }
     }
 }
 
 @Composable
 fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () -> Unit) {
-    val defaultColor = MaterialTheme.colorScheme.primaryContainer
-    val vibrant = state.paletteColors["vibrant"] ?: defaultColor
-    val darkVibrant = state.paletteColors["darkVibrant"] ?: Color.Black
+    val defaultAccent = AccentPrimary
+    val vibrant = state.paletteColors["vibrant"] ?: defaultAccent
+    val darkVibrant = state.paletteColors["darkVibrant"] ?: GradientStart
     val lightVibrant = state.paletteColors["lightVibrant"] ?: Color.White
+
+    // Vinyl rotation animation
+    val infiniteTransition = rememberInfiniteTransition(label = "vinyl")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 8000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "discRotation"
+    )
+    val currentRotation = if (state.isPlaying) rotation else 0f
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(DarkBackground)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onDoubleTap = { viewModel.playPause() }
@@ -215,9 +270,9 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
                 var dragAmount = 0f
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        if (dragAmount < -50) { // Swipe Left -> Next
+                        if (dragAmount < -80) {
                             viewModel.next()
-                        } else if (dragAmount > 50) { // Swipe Right -> Prev
+                        } else if (dragAmount > 80) {
                             viewModel.previous()
                         }
                         dragAmount = 0f
@@ -229,7 +284,7 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
                 )
             }
     ) {
-        // Blurred Background
+        // Blurred Background with album art
         state.currentSong?.albumArtUri?.let { uri ->
             AsyncImage(
                 model = uri,
@@ -237,21 +292,24 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(60.dp)
-                    .alpha(0.5f)
+                    .blur(80.dp)
+                    .scale(1.2f)
+                    .graphicsLayer { alpha = 0.4f }
             )
         }
 
-        // Overlay Gradient with Dynamic Color
+        // Gradient overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            darkVibrant.copy(alpha = 0.3f),
-                            Color.Black.copy(alpha = 0.9f)
-                        )
+                            darkVibrant.copy(alpha = 0.6f),
+                            DarkBackground.copy(alpha = 0.95f),
+                            DarkBackground
+                        ),
+                        startY = 0f
                     )
                 )
         )
@@ -261,13 +319,14 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
             onClick = onBack,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(16.dp)
+                .padding(8.dp)
                 .statusBarsPadding()
         ) {
              Icon(
                  imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                  contentDescription = "Back",
-                 tint = Color.White
+                 tint = Color.White,
+                 modifier = Modifier.size(28.dp)
              )
         }
 
@@ -275,244 +334,337 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(32.dp),
-            verticalArrangement = Arrangement.Center,
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 32.dp)
+                .padding(top = 60.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Album Art Card
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(16.dp),
-                modifier = Modifier.size(320.dp)
+            Spacer(modifier = Modifier.weight(0.5f))
+            
+            // Vinyl Disc with Album Art
+            Box(
+                modifier = Modifier.size(300.dp),
+                contentAlignment = Alignment.Center
             ) {
-                if (state.currentSong?.albumArtUri != null) {
-                    AsyncImage(
-                        model = state.currentSong.albumArtUri,
-                        contentDescription = "Album Art",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
+                // Vinyl disc background (black)
+                Box(
+                    modifier = Modifier
+                        .size(300.dp)
+                        .rotate(currentRotation)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1A1A1A))
+                        .border(2.dp, Color(0xFF333333), CircleShape)
+                ) {
+                    // Grooves effect
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.DarkGray),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("♪", fontSize = 64.sp, color = Color.White)
+                            .padding(40.dp)
+                            .border(1.dp, Color(0xFF2A2A2A), CircleShape)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(60.dp)
+                            .border(1.dp, Color(0xFF252525), CircleShape)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(80.dp)
+                            .border(1.dp, Color(0xFF2A2A2A), CircleShape)
+                    )
+                }
+                
+                // Album art center (label)
+                Card(
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .size(140.dp)
+                        .rotate(currentRotation),
+                    elevation = CardDefaults.cardElevation(8.dp)
+                ) {
+                    if (state.currentSong?.albumArtUri != null) {
+                        AsyncImage(
+                            model = state.currentSong.albumArtUri,
+                            contentDescription = "Album Art",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(vibrant, darkVibrant)
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
                     }
                 }
+                
+                // Center hole
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(DarkBackground)
+                        .border(2.dp, Color(0xFF333333), CircleShape)
+                )
             }
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            // Text Info
+            // Song Info
             Text(
                 text = state.currentSong?.title ?: "No Song Playing",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = lightVibrant,
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                color = Color.White,
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = state.currentSong?.artist ?: "Unknown Artist",
-                style = MaterialTheme.typography.titleMedium,
-                color = lightVibrant.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White.copy(alpha = 0.6f),
                 maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(40.dp))
             
             // Progress Bar
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // Modern Custom Slider
-                var isDragging by remember { mutableStateOf(false) }
-                var dragPosition by remember { mutableFloatStateOf(0f) }
-                
-                val currentProgress = if (isDragging) dragPosition else state.currentPosition.toFloat()
-                val totalDuration = state.duration.coerceAtLeast(1L).toFloat()
-                val progressFraction = (currentProgress / totalDuration).coerceIn(0f, 1f)
-                
-                // Animated Progress Value for smooth visual connection
-                val animatedProgress by androidx.compose.animation.core.animateFloatAsState(
-                    targetValue = progressFraction,
-                    animationSpec = androidx.compose.animation.core.tween(durationMillis = if (isDragging) 0 else 100)
-                )
+            ProgressSection(state, viewModel, vibrant, darkVibrant, lightVibrant)
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(40.dp) // Touch target height
-                        .pointerInput(Unit) {
-                            detectHorizontalDragGestures(
-                                onDragStart = { offset ->
-                                    isDragging = true
-                                    dragPosition = (offset.x / size.width) * totalDuration
-                                },
-                                onDragEnd = {
-                                    viewModel.seekTo(dragPosition.toLong())
-                                    isDragging = false
-                                },
-                                onHorizontalDrag = { change, _ ->
-                                    change.consume()
-                                    val newProgress = (change.position.x / size.width) * totalDuration
-                                    dragPosition = newProgress.coerceIn(0f, totalDuration)
-                                }
-                            )
-                        }
-                        .pointerInput(Unit) {
-                            detectTapGestures { offset ->
-                                val newProgress = (offset.x / size.width) * totalDuration
-                                viewModel.seekTo(newProgress.toLong())
-                            }
-                        },
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    // Track Background
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(Color.White.copy(alpha = 0.2f))
-                            .align(Alignment.Center)
-                    )
-                    
-                    // Active Gradient Track
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(animatedProgress)
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        darkVibrant,
-                                        vibrant,
-                                        lightVibrant
-                                    )
-                                )
-                            )
-                            .align(Alignment.CenterStart)
-                    )
-                    
-                    // Glowing Thumb Container
-                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth(animatedProgress)
-                            .fillMaxHeight()
-                            .align(Alignment.CenterStart)
-                    ) {
-                        // Thumb
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .align(Alignment.CenterEnd)
-                                .offset(x = 10.dp) // Center on the end edge
-                                .shadow(8.dp, androidx.compose.foundation.shape.CircleShape, spotColor = vibrant)
-                                .background(Color.White, androidx.compose.foundation.shape.CircleShape)
-                        )
-                    }
-                }
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = formatTime(state.currentPosition),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                    Text(
-                        text = formatTime(state.duration),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             // Controls
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Shuffle
-                 IconButton(onClick = { viewModel.toggleShuffle() }) {
-                    Icon(
-                        imageVector = Icons.Filled.Shuffle,
-                        contentDescription = "Shuffle",
-                        tint = if (state.isShuffleEnabled) vibrant else Color.White.copy(alpha = 0.5f),
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-                
-                // Prev
-                IconButton(onClick = { viewModel.previous() }) {
-                    Icon(
-                        imageVector = Icons.Filled.SkipPrevious,
-                        contentDescription = "Previous",
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
+            ControlsSection(state, viewModel, vibrant)
+            
+            Spacer(modifier = Modifier.weight(1f))
+            
+            // Gesture hint
+            Text(
+                text = "Swipe to change • Double tap to play/pause",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.3f),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
 
-                // Play/Pause (FAB style)
+@Composable
+fun ProgressSection(
+    state: MusicState,
+    viewModel: MusicViewModel,
+    vibrant: Color,
+    darkVibrant: Color,
+    lightVibrant: Color
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        var isDragging by remember { mutableStateOf(false) }
+        var dragPosition by remember { mutableFloatStateOf(0f) }
+        
+        val currentProgress = if (isDragging) dragPosition else state.currentPosition.toFloat()
+        val totalDuration = state.duration.coerceAtLeast(1L).toFloat()
+        val progressFraction = (currentProgress / totalDuration).coerceIn(0f, 1f)
+        
+        val animatedProgress by animateFloatAsState(
+            targetValue = progressFraction,
+            animationSpec = tween(durationMillis = if (isDragging) 0 else 100),
+            label = "progress"
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            dragPosition = (offset.x / size.width) * totalDuration
+                        },
+                        onDragEnd = {
+                            viewModel.seekTo(dragPosition.toLong())
+                            isDragging = false
+                        },
+                        onHorizontalDrag = { change, _ ->
+                            change.consume()
+                            val newProgress = (change.position.x / size.width) * totalDuration
+                            dragPosition = newProgress.coerceIn(0f, totalDuration)
+                        }
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        val newProgress = (offset.x / size.width) * totalDuration
+                        viewModel.seekTo(newProgress.toLong())
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            // Track Background
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White.copy(alpha = 0.15f))
+            )
+            
+            // Active Track with Gradient
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animatedProgress)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(vibrant, lightVibrant)
+                        )
+                    )
+                    .align(Alignment.CenterStart)
+            )
+            
+            // Thumb
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animatedProgress)
+                    .align(Alignment.CenterStart)
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(72.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(vibrant)
-                        .clickable { viewModel.playPause() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = "Play/Pause",
-                        tint = Color.Black, // Contrast against vibrant
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-
-                // Next
-                IconButton(onClick = { viewModel.next() }) {
-                    Icon(
-                        imageVector = Icons.Filled.SkipNext,
-                        contentDescription = "Next",
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-                
-                // Repeat
-                 IconButton(onClick = { viewModel.toggleRepeat() }) {
-                     val icon = when(state.repeatMode) {
-                         androidx.media3.common.Player.REPEAT_MODE_ONE -> Icons.Filled.RepeatOne
-                         else -> Icons.Filled.Repeat
-                     }
-                     val tint = if (state.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) vibrant else Color.White.copy(alpha = 0.5f)
-                     
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = "Repeat",
-                        tint = tint,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+                        .size(16.dp)
+                        .align(Alignment.CenterEnd)
+                        .offset(x = 8.dp)
+                        .shadow(8.dp, CircleShape, spotColor = vibrant)
+                        .background(Color.White, CircleShape)
+                )
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-
-             // Controls Hint - kept minimal
-             Text(
-                text = "✋ Pause | 👍 Next | 👎 Prev | 👌 Volume",
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = formatTime(state.currentPosition),
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.5f)
+            )
+            Text(
+                text = formatTime(state.duration),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.5f)
+            )
+        }
+    }
+}
+
+@Composable
+fun ControlsSection(state: MusicState, viewModel: MusicViewModel, accentColor: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Shuffle
+        IconButton(
+            onClick = { viewModel.toggleShuffle() },
+            modifier = Modifier.size(48.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Shuffle,
+                contentDescription = "Shuffle",
+                tint = if (state.isShuffleEnabled) accentColor else Color.White.copy(alpha = 0.4f),
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        
+        // Previous
+        IconButton(
+            onClick = { viewModel.previous() },
+            modifier = Modifier.size(56.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.SkipPrevious,
+                contentDescription = "Previous",
+                tint = Color.White,
+                modifier = Modifier.size(36.dp)
+            )
+        }
+
+        // Play/Pause (Large FAB)
+        Box(
+            modifier = Modifier
+                .size(80.dp)
+                .shadow(16.dp, CircleShape, spotColor = accentColor)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(accentColor, accentColor.copy(alpha = 0.8f))
+                    )
+                )
+                .clickable { viewModel.playPause() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                contentDescription = "Play/Pause",
+                tint = Color.White,
+                modifier = Modifier.size(40.dp)
+            )
+        }
+
+        // Next
+        IconButton(
+            onClick = { viewModel.next() },
+            modifier = Modifier.size(56.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.SkipNext,
+                contentDescription = "Next",
+                tint = Color.White,
+                modifier = Modifier.size(36.dp)
+            )
+        }
+        
+        // Repeat
+        IconButton(
+            onClick = { viewModel.toggleRepeat() },
+            modifier = Modifier.size(48.dp)
+        ) {
+            val icon = when(state.repeatMode) {
+                androidx.media3.common.Player.REPEAT_MODE_ONE -> Icons.Filled.RepeatOne
+                else -> Icons.Filled.Repeat
+            }
+            val tint = if (state.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF) 
+                accentColor else Color.White.copy(alpha = 0.4f)
+            
+            Icon(
+                imageVector = icon,
+                contentDescription = "Repeat",
+                tint = tint,
+                modifier = Modifier.size(24.dp)
             )
         }
     }
