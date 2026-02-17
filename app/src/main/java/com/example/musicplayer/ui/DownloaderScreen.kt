@@ -206,11 +206,12 @@ fun DownloaderScreen(
                 }
             }
             
-            // Results
+            // Results — fills space above status card
             if (state.searchResults.isEmpty() && !state.isSearching) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .weight(1f)
                         .padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -237,7 +238,9 @@ fun DownloaderScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                     contentPadding = PaddingValues(vertical = 8.dp)
                 ) {
                     items(state.searchResults) { result ->
@@ -249,22 +252,24 @@ fun DownloaderScreen(
                     }
                 }
             }
-        }
-        
-        // Glass download status card
-        AnimatedVisibility(
-            visible = state.downloadState !is DownloadState.Idle,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(16.dp)
-                .navigationBarsPadding()
-        ) {
-            DownloadStatusCard(
-                downloadState = state.downloadState,
-                onDismiss = { viewModel.resetDownloadState() }
-            )
+
+            // Download status card — sits below the list, never overlaps
+            AnimatedVisibility(
+                visible = state.downloadState !is DownloadState.Idle,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .navigationBarsPadding()
+                ) {
+                    DownloadStatusCard(
+                        downloadState = state.downloadState,
+                        onDismiss = { viewModel.resetDownloadState() }
+                    )
+                }
+            }
         }
     }
 }
