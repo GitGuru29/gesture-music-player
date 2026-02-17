@@ -23,8 +23,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -64,12 +66,10 @@ fun MusicPlayerScreen(
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
-
     val permissionState = rememberPermissionState(
         permission = Manifest.permission.CAMERA
     )
-    
-     // Audio permission handling logic
+
      val audioPermissionState = rememberPermissionState(
         permission = if (Build.VERSION.SDK_INT >= 33) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -83,11 +83,9 @@ fun MusicPlayerScreen(
         permissionState.launchPermissionRequest()
     }
 
-    // Feedback State
     var gestureFeedback by remember { mutableStateOf<String?>(null) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    
-    // Auto-hide feedback
+
     LaunchedEffect(gestureFeedback) {
         if (gestureFeedback != null) {
             kotlinx.coroutines.delay(1000)
@@ -95,15 +93,12 @@ fun MusicPlayerScreen(
         }
     }
 
-    // Camera Logic
     DisposableEffect(lifecycleOwner) {
         val cameraProviderFuture = androidx.camera.lifecycle.ProcessCameraProvider.getInstance(context)
-        
+
         val analyzer = GestureAnalyzer(context) { gesture ->
-            // Trigger Feedback
             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-            
-            // Map internal gesture to user-friendly label/icon
+
             val feedbackText = when(gesture) {
                 "PAUSE_PLAY" -> "Play/Pause"
                 "NEXT" -> "Next"
@@ -133,7 +128,7 @@ fun MusicPlayerScreen(
                 val analysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
-                
+
                 analysis.setAnalyzer(java.util.concurrent.Executors.newSingleThreadExecutor(), analyzer)
 
                 val cameraSelector = androidx.camera.core.CameraSelector.DEFAULT_FRONT_CAMERA
@@ -162,33 +157,37 @@ fun MusicPlayerScreen(
     if (audioPermissionState.status.isGranted) {
         Box(modifier = Modifier.fillMaxSize()) {
             MusicPlayerContent(state, viewModel, onBack)
-            
-            // Gesture Feedback Overlay
+
+            // Glass gesture feedback overlay
             AnimatedVisibility(
                 visible = gestureFeedback != null,
                 enter = fadeIn() + scaleIn(),
                 exit = fadeOut() + scaleOut(),
                 modifier = Modifier.align(Alignment.Center)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color.Black.copy(alpha = 0.85f))
-                        .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(24.dp)),
-                    contentAlignment = Alignment.Center
+                GlassSurface(
+                    modifier = Modifier.size(130.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    backgroundColor = GlassSurfaceStrong,
+                    borderColor = GlassBorderBright,
+                    glowColor = AccentPrimary.copy(alpha = 0.3f)
                 ) {
-                    Text(
-                        text = gestureFeedback ?: "",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = gestureFeedback ?: "",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
             }
 
-            // Camera permission hint
+            // Glass camera permission hint
             AnimatedVisibility(
                 visible = !permissionState.status.isGranted,
                 enter = fadeIn(),
@@ -198,16 +197,17 @@ fun MusicPlayerScreen(
                     .statusBarsPadding()
                     .padding(top = 60.dp)
             ) {
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.8f)),
-                    modifier = Modifier.clickable { permissionState.launchPermissionRequest() }
+                GlassSurface(
+                    modifier = Modifier.clickable { permissionState.launchPermissionRequest() },
+                    shape = RoundedCornerShape(14.dp),
+                    backgroundColor = GlassSurfaceStrong,
+                    borderColor = GlassBorderBright
                 ) {
                     Text(
                         text = "✋ Tap to enable Air Gestures",
                         color = Color.White,
                         style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)
                     )
                 }
             }
@@ -244,7 +244,6 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
     val darkVibrant = state.paletteColors["darkVibrant"] ?: GradientStart
     val lightVibrant = state.paletteColors["lightVibrant"] ?: Color.White
 
-    // Vinyl rotation animation
     val infiniteTransition = rememberInfiniteTransition(label = "vinyl")
     val rotation by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -284,7 +283,7 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
                 )
             }
     ) {
-        // Blurred Background with album art
+        // Blurred album art — more intense for glass depth
         state.currentSong?.albumArtUri?.let { uri ->
             AsyncImage(
                 model = uri,
@@ -292,42 +291,58 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(80.dp)
-                    .scale(1.2f)
-                    .graphicsLayer { alpha = 0.4f }
+                    .blur(100.dp)
+                    .scale(1.4f)
+                    .graphicsLayer { alpha = 0.5f }
             )
         }
 
-        // Gradient overlay
+        // Gradient overlay with glass depth
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            darkVibrant.copy(alpha = 0.6f),
-                            DarkBackground.copy(alpha = 0.95f),
-                            DarkBackground
+                            darkVibrant.copy(alpha = 0.3f),
+                            DarkBackground.copy(alpha = 0.8f),
+                            DarkBackground.copy(alpha = 0.95f)
                         ),
                         startY = 0f
                     )
                 )
         )
+
+        // Ambient colored glow orb behind disc
+        Box(
+            modifier = Modifier
+                .size(350.dp)
+                .align(Alignment.Center)
+                .offset(y = (-80).dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            vibrant.copy(alpha = 0.12f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
         
-        // Back Button
-        IconButton(
+        // Glass back button
+        GlassIconButton(
             onClick = onBack,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(8.dp)
+                .padding(12.dp)
                 .statusBarsPadding()
         ) {
-             Icon(
-                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                 contentDescription = "Back",
-                 tint = Color.White,
-                 modifier = Modifier.size(28.dp)
-             )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
         }
 
         // Content
@@ -342,48 +357,55 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
         ) {
             Spacer(modifier = Modifier.weight(0.5f))
             
-            // Vinyl Disc with Album Art
+            // Vinyl Disc with glass glow ring
             Box(
                 modifier = Modifier.size(300.dp),
                 contentAlignment = Alignment.Center
             ) {
-                // Vinyl disc background (black)
+                // Pulsing glow ring
+                GlassGlowRing(
+                    modifier = Modifier.size(306.dp),
+                    color = vibrant
+                )
+                
+                // Vinyl disc body
                 Box(
                     modifier = Modifier
                         .size(300.dp)
                         .rotate(currentRotation)
                         .clip(CircleShape)
-                        .background(Color(0xFF1A1A1A))
-                        .border(2.dp, Color(0xFF333333), CircleShape)
+                        .background(Color(0xFF0A0A0A))
+                        .border(1.5.dp, GlassBorder, CircleShape)
                 ) {
-                    // Grooves effect
+                    // Vinyl grooves
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(40.dp)
-                            .border(1.dp, Color(0xFF2A2A2A), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.06f), CircleShape)
                     )
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(60.dp)
-                            .border(1.dp, Color(0xFF252525), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.04f), CircleShape)
                     )
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(80.dp)
-                            .border(1.dp, Color(0xFF2A2A2A), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.06f), CircleShape)
                     )
                 }
                 
-                // Album art center (label)
+                // Album art center label with glass border
                 Card(
                     shape = CircleShape,
                     modifier = Modifier
                         .size(140.dp)
-                        .rotate(currentRotation),
-                    elevation = CardDefaults.cardElevation(8.dp)
+                        .rotate(currentRotation)
+                        .border(2.5.dp, GlassBorderBright, CircleShape),
+                    elevation = CardDefaults.cardElevation(12.dp)
                 ) {
                     if (state.currentSong?.albumArtUri != null) {
                         AsyncImage(
@@ -419,39 +441,56 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
                         .size(16.dp)
                         .clip(CircleShape)
                         .background(DarkBackground)
-                        .border(2.dp, Color(0xFF333333), CircleShape)
+                        .border(1.5.dp, GlassBorder, CircleShape)
                 )
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
-
-            // Song Info
-            Text(
-                text = state.currentSong?.title ?: "No Song Playing",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = state.currentSong?.artist ?: "Unknown Artist",
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.6f),
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            
             Spacer(modifier = Modifier.height(40.dp))
+
+            // Song Info in glass panel
+            GlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                shape = RoundedCornerShape(18.dp),
+                backgroundColor = GlassSurface,
+                borderColor = GlassBorder,
+                glowColor = vibrant.copy(alpha = 0.08f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = state.currentSong?.title ?: "No Song Playing",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = state.currentSong?.artist ?: "Unknown Artist",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.5f),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(28.dp))
             
             // Progress Bar
             ProgressSection(state, viewModel, vibrant, darkVibrant, lightVibrant)
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Controls
             ControlsSection(state, viewModel, vibrant)
@@ -462,7 +501,7 @@ fun MusicPlayerContent(state: MusicState, viewModel: MusicViewModel, onBack: () 
             Text(
                 text = "Swipe to change • Double tap to play/pause",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.3f),
+                color = Color.White.copy(alpha = 0.2f),
                 textAlign = TextAlign.Center
             )
         }
@@ -520,30 +559,37 @@ fun ProgressSection(
                 },
             contentAlignment = Alignment.Center
         ) {
-            // Track Background
+            // Glass track background
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(GlassSurface)
+                    .border(0.5.dp, GlassBorderDim, RoundedCornerShape(3.dp))
             )
             
-            // Active Track with Gradient
+            // Active track with gradient glow
             Box(
                 modifier = Modifier
                     .fillMaxWidth(animatedProgress)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp))
                     .background(
                         Brush.horizontalGradient(
                             colors = listOf(vibrant, lightVibrant)
                         )
                     )
+                    .graphicsLayer {
+                        shadowElevation = 12f
+                        shape = RoundedCornerShape(3.dp)
+                        ambientShadowColor = vibrant
+                        spotShadowColor = vibrant
+                    }
                     .align(Alignment.CenterStart)
             )
             
-            // Thumb
+            // Glowing thumb with glass border
             Box(
                 modifier = Modifier
                     .fillMaxWidth(animatedProgress)
@@ -551,11 +597,17 @@ fun ProgressSection(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(16.dp)
+                        .size(18.dp)
                         .align(Alignment.CenterEnd)
-                        .offset(x = 8.dp)
-                        .shadow(8.dp, CircleShape, spotColor = vibrant)
+                        .offset(x = 9.dp)
+                        .graphicsLayer {
+                            shadowElevation = 20f
+                            shape = CircleShape
+                            ambientShadowColor = vibrant
+                            spotShadowColor = vibrant
+                        }
                         .background(Color.White, CircleShape)
+                        .border(2.dp, vibrant.copy(alpha = 0.6f), CircleShape)
                 )
             }
         }
@@ -569,12 +621,12 @@ fun ProgressSection(
             Text(
                 text = formatTime(state.currentPosition),
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.5f)
+                color = Color.White.copy(alpha = 0.4f)
             )
             Text(
                 text = formatTime(state.duration),
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.5f)
+                color = Color.White.copy(alpha = 0.4f)
             )
         }
     }
@@ -588,42 +640,54 @@ fun ControlsSection(state: MusicState, viewModel: MusicViewModel, accentColor: C
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Shuffle
-        IconButton(
+        GlassIconButton(
             onClick = { viewModel.toggleShuffle() },
-            modifier = Modifier.size(48.dp)
+            isActive = state.isShuffleEnabled,
+            activeColor = accentColor,
+            size = 48.dp
         ) {
             Icon(
                 imageVector = Icons.Filled.Shuffle,
                 contentDescription = "Shuffle",
                 tint = if (state.isShuffleEnabled) accentColor else Color.White.copy(alpha = 0.4f),
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
         
         // Previous
-        IconButton(
+        GlassIconButton(
             onClick = { viewModel.previous() },
-            modifier = Modifier.size(56.dp)
+            size = 56.dp
         ) {
             Icon(
                 imageVector = Icons.Filled.SkipPrevious,
                 contentDescription = "Previous",
                 tint = Color.White,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
 
-        // Play/Pause (Large FAB)
+        // Play/Pause — large glass FAB with strong glow
         Box(
             modifier = Modifier
                 .size(80.dp)
-                .shadow(16.dp, CircleShape, spotColor = accentColor)
+                .graphicsLayer {
+                    shadowElevation = 32f
+                    shape = CircleShape
+                    clip = false
+                    ambientShadowColor = accentColor
+                    spotShadowColor = accentColor
+                }
                 .clip(CircleShape)
                 .background(
-                    Brush.linearGradient(
-                        colors = listOf(accentColor, accentColor.copy(alpha = 0.8f))
+                    Brush.radialGradient(
+                        colors = listOf(
+                            accentColor,
+                            accentColor.copy(alpha = 0.7f)
+                        )
                     )
                 )
+                .border(1.5.dp, Color.White.copy(alpha = 0.3f), CircleShape)
                 .clickable { viewModel.playPause() },
             contentAlignment = Alignment.Center
         ) {
@@ -636,22 +700,24 @@ fun ControlsSection(state: MusicState, viewModel: MusicViewModel, accentColor: C
         }
 
         // Next
-        IconButton(
+        GlassIconButton(
             onClick = { viewModel.next() },
-            modifier = Modifier.size(56.dp)
+            size = 56.dp
         ) {
             Icon(
                 imageVector = Icons.Filled.SkipNext,
                 contentDescription = "Next",
                 tint = Color.White,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
         
         // Repeat
-        IconButton(
+        GlassIconButton(
             onClick = { viewModel.toggleRepeat() },
-            modifier = Modifier.size(48.dp)
+            isActive = state.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF,
+            activeColor = accentColor,
+            size = 48.dp
         ) {
             val icon = when(state.repeatMode) {
                 androidx.media3.common.Player.REPEAT_MODE_ONE -> Icons.Filled.RepeatOne
@@ -664,7 +730,7 @@ fun ControlsSection(state: MusicState, viewModel: MusicViewModel, accentColor: C
                 imageVector = icon,
                 contentDescription = "Repeat",
                 tint = tint,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
     }
@@ -677,5 +743,4 @@ fun formatTime(ms: Long): String {
     return String.format("%02d:%02d", minutes, seconds)
 }
 
-// Extension to set alpha on modifier
 fun Modifier.alpha(alpha: Float) = this.then(Modifier.graphicsLayer(alpha = alpha))
