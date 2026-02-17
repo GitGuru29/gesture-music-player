@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,8 +24,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -50,75 +53,117 @@ fun LibraryScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF0D0B1A),
+                        DarkBackground,
+                        Color(0xFF08081A),
+                        DarkBackground
+                    )
+                )
+            )
     ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = if (state.currentSong != null) 100.dp else 16.dp)
-        ) {
-            // Header with search
-            item {
-                LibraryHeader(
-                    songCount = state.playlist.size,
-                    isSearchActive = state.isSearchActive,
-                    searchQuery = state.searchQuery,
-                    onSearchClick = { viewModel.toggleSearch() },
-                    onSearchQueryChange = { viewModel.setSearchQuery(it) },
-                    onDownloadClick = onNavigateToDownloader
+        // Ambient background glow orbs
+        Box(
+            modifier = Modifier
+                .size(300.dp)
+                .offset(x = (-60).dp, y = (-40).dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            AccentPrimary.copy(alpha = 0.08f),
+                            Color.Transparent
+                        )
+                    )
                 )
-            }
-            
-            // Tabs
-            item {
-                TabRow(
-                    selectedTab = state.selectedTab,
-                    onTabSelected = { viewModel.selectTab(it) },
-                    favoritesCount = state.favoriteIds.size
+        )
+        Box(
+            modifier = Modifier
+                .size(250.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 80.dp, y = 100.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            AccentSecondary.copy(alpha = 0.06f),
+                            Color.Transparent
+                        )
+                    )
                 )
-            }
+        )
 
-            // Song list
-            itemsIndexed(
-                items = filteredPlaylist,
-                key = { _, song -> song.id }
-            ) { index, song ->
-                SongListItem(
-                    song = song,
-                    isPlaying = song.id == state.currentSong?.id,
-                    isFavorite = song.id in state.favoriteIds,
-                    index = index,
-                    onFavoriteClick = { viewModel.toggleFavorite(song.id) },
-                    onClick = {
-                        viewModel.playSong(song)
-                        onNavigateToPlayer()
-                    }
-                )
-            }
-
-            // Empty state
-            if (filteredPlaylist.isEmpty()) {
+        // Stacked layout: list fills above, mini player sits below
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                // Header with search
                 item {
-                    EmptyState(selectedTab = state.selectedTab, searchQuery = state.searchQuery)
+                    LibraryHeader(
+                        songCount = state.playlist.size,
+                        isSearchActive = state.isSearchActive,
+                        searchQuery = state.searchQuery,
+                        onSearchClick = { viewModel.toggleSearch() },
+                        onSearchQueryChange = { viewModel.setSearchQuery(it) },
+                        onDownloadClick = onNavigateToDownloader
+                    )
+                }
+                
+                // Tabs
+                item {
+                    TabRow(
+                        selectedTab = state.selectedTab,
+                        onTabSelected = { viewModel.selectTab(it) },
+                        favoritesCount = state.favoriteIds.size
+                    )
+                }
+
+                // Song list
+                itemsIndexed(
+                    items = filteredPlaylist,
+                    key = { _, song -> song.id }
+                ) { index, song ->
+                    SongListItem(
+                        song = song,
+                        isPlaying = song.id == state.currentSong?.id,
+                        isFavorite = song.id in state.favoriteIds,
+                        index = index,
+                        onFavoriteClick = { viewModel.toggleFavorite(song.id) },
+                        onClick = {
+                            viewModel.playSong(song)
+                            onNavigateToPlayer()
+                        }
+                    )
+                }
+
+                // Empty state
+                if (filteredPlaylist.isEmpty()) {
+                    item {
+                        EmptyState(selectedTab = state.selectedTab, searchQuery = state.searchQuery)
+                    }
                 }
             }
-        }
 
-        // Mini Player
-        AnimatedVisibility(
-            visible = state.currentSong != null,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            state.currentSong?.let { song ->
-                MiniPlayer(
-                    song = song,
-                    isPlaying = state.isPlaying,
-                    progress = state.currentPosition.toFloat() / state.duration.coerceAtLeast(1L).toFloat(),
-                    accentColor = state.paletteColors["vibrant"] ?: AccentPrimary,
-                    onPlayPause = { viewModel.playPause() },
-                    onClick = onNavigateToPlayer
-                )
+            // Mini Player — sits below the list, never overlaps
+            AnimatedVisibility(
+                visible = state.currentSong != null,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+            ) {
+                state.currentSong?.let { song ->
+                    MiniPlayer(
+                        song = song,
+                        isPlaying = state.isPlaying,
+                        progress = state.currentPosition.toFloat() / state.duration.coerceAtLeast(1L).toFloat(),
+                        accentColor = state.paletteColors["vibrant"] ?: AccentPrimary,
+                        onPlayPause = { viewModel.playPause() },
+                        onClick = onNavigateToPlayer
+                    )
+                }
             }
         }
     }
@@ -147,8 +192,8 @@ fun LibraryHeader(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        AccentPrimary.copy(alpha = 0.3f),
-                        AccentPrimary.copy(alpha = 0.1f),
+                        AccentPrimary.copy(alpha = 0.12f),
+                        AccentSecondary.copy(alpha = 0.04f),
                         Color.Transparent
                     )
                 )
@@ -167,31 +212,35 @@ fun LibraryHeader(
                         Text(
                             text = "My Music",
                             style = MaterialTheme.typography.headlineLarge,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = Color.White
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "$songCount songs",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            color = TextSecondary
                         )
                     }
                 } else {
-                    // Search bar
-                    Box(
+                    // Glass search bar
+                    GlassSurface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp)
-                            .clip(RoundedCornerShape(24.dp))
-                            .background(DarkSurfaceVariant)
-                            .padding(horizontal = 16.dp),
-                        contentAlignment = Alignment.CenterStart
+                            .height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        backgroundColor = GlassSurfaceStrong,
+                        borderColor = GlassBorderBright
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = null,
-                                tint = TextSecondary,
+                                tint = AccentSecondary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(12.dp))
@@ -202,7 +251,7 @@ fun LibraryHeader(
                                     .weight(1f)
                                     .focusRequester(focusRequester),
                                 textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                    color = MaterialTheme.colorScheme.onBackground
+                                    color = Color.White
                                 ),
                                 cursorBrush = SolidColor(AccentPrimary),
                                 singleLine = true,
@@ -212,7 +261,7 @@ fun LibraryHeader(
                                             Text(
                                                 "Search songs...",
                                                 style = MaterialTheme.typography.bodyLarge,
-                                                color = TextSecondary
+                                                color = TextSecondary.copy(alpha = 0.5f)
                                             )
                                         }
                                         innerTextField()
@@ -238,35 +287,29 @@ fun LibraryHeader(
                 
                 Spacer(modifier = Modifier.width(8.dp))
                 
-                // Search toggle button
-                IconButton(
+                // Glass search toggle button
+                GlassIconButton(
                     onClick = onSearchClick,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(if (isSearchActive) AccentPrimary else DarkSurfaceVariant)
+                    isActive = isSearchActive,
+                    activeColor = AccentPrimary
                 ) {
                     Icon(
                         imageVector = if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
                         contentDescription = "Search",
-                        tint = if (isSearchActive) Color.White else TextSecondary
+                        tint = if (isSearchActive) Color.White else TextSecondary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
                 
                 Spacer(modifier = Modifier.width(8.dp))
                 
-                // Download button
-                IconButton(
-                    onClick = onDownloadClick,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(DarkSurfaceVariant)
-                ) {
+                // Glass download button
+                GlassIconButton(onClick = onDownloadClick) {
                     Icon(
                         imageVector = Icons.Default.Download,
                         contentDescription = "Download",
-                        tint = TextSecondary
+                        tint = TextSecondary,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
@@ -286,60 +329,17 @@ fun TabRow(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        TabChip(
+        GlassPill(
             text = "All",
             selected = selectedTab == LibraryTab.ALL,
             onClick = { onTabSelected(LibraryTab.ALL) }
         )
-        TabChip(
+        GlassPill(
             text = "Favorites",
             badge = if (favoritesCount > 0) favoritesCount.toString() else null,
             selected = selectedTab == LibraryTab.FAVORITES,
             onClick = { onTabSelected(LibraryTab.FAVORITES) }
         )
-    }
-}
-
-@Composable
-fun TabChip(
-    text: String,
-    badge: String? = null,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val backgroundColor = if (selected) AccentPrimary else DarkSurfaceVariant
-    val textColor = if (selected) Color.White else TextSecondary
-    
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(backgroundColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelLarge,
-                color = textColor
-            )
-            if (badge != null) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Box(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clip(CircleShape)
-                        .background(if (selected) Color.White.copy(alpha = 0.3f) else AccentPrimary.copy(alpha = 0.3f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = badge,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = textColor
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -362,96 +362,132 @@ fun SongListItem(
         label = "itemAlpha"
     )
 
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 4.dp)
             .graphicsLayer { alpha = animatedAlpha }
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        // Album art
-        Box {
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.size(56.dp),
-                elevation = CardDefaults.cardElevation(if (isPlaying) 8.dp else 2.dp)
-            ) {
-                Box {
-                    if (song.albumArtUri != null) {
-                        AsyncImage(
-                            model = song.albumArtUri,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.linearGradient(
-                                        colors = listOf(DarkSurfaceVariant, DarkCard)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = TextSecondary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
+        // Glass row — visible frost when playing, subtle otherwise
+        val rowBg = if (isPlaying) AccentPrimary.copy(alpha = 0.12f) else GlassSurfaceDim
+        val rowBorder = if (isPlaying) AccentPrimary.copy(alpha = 0.4f) else GlassBorderDim
 
-                    if (isPlaying) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.4f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            PlayingIndicator()
+        GlassSurface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            backgroundColor = rowBg,
+            borderColor = rowBorder,
+            enableTopHighlight = isPlaying,
+            glowColor = if (isPlaying) GlowPrimary else null
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onClick)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Album art with glass border
+                Box {
+                    Card(
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .size(56.dp)
+                            .border(
+                                width = if (isPlaying) 2.dp else 1.dp,
+                                color = if (isPlaying) AccentPrimary.copy(alpha = 0.6f) else GlassBorder,
+                                shape = RoundedCornerShape(14.dp)
+                            ),
+                        elevation = CardDefaults.cardElevation(if (isPlaying) 12.dp else 4.dp)
+                    ) {
+                        Box {
+                            if (song.albumArtUri != null) {
+                                AsyncImage(
+                                    model = song.albumArtUri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.linearGradient(
+                                                colors = listOf(DarkSurfaceVariant, DarkCard)
+                                            )
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = TextSecondary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            if (isPlaying) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.45f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    PlayingIndicator()
+                                }
+                            }
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = song.title,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (isPlaying) AccentPrimary else Color.White
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = song.artist,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (isPlaying) TextSecondary else TextSecondary.copy(alpha = 0.7f)
+                    )
+                }
+                
+                // Favorite button with glow
+                IconButton(
+                    onClick = onFavoriteClick,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        tint = if (isFavorite) AccentPrimary else TextSecondary.copy(alpha = 0.4f),
+                        modifier = Modifier
+                            .size(22.dp)
+                            .then(
+                                if (isFavorite) {
+                                    Modifier.graphicsLayer {
+                                        shadowElevation = 12f
+                                        shape = CircleShape
+                                        ambientShadowColor = AccentPrimary
+                                        spotShadowColor = AccentPrimary
+                                    }
+                                } else Modifier
+                            )
+                    )
+                }
             }
-        }
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = song.title,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = if (isPlaying) FontWeight.SemiBold else FontWeight.Normal
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = if (isPlaying) AccentPrimary else MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = song.artist,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-            )
-        }
-        
-        // Favorite button
-        IconButton(
-            onClick = onFavoriteClick,
-            modifier = Modifier.size(40.dp)
-        ) {
-            Icon(
-                imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                tint = if (isFavorite) AccentPrimary else TextSecondary,
-                modifier = Modifier.size(22.dp)
-            )
         }
     }
 }
@@ -487,19 +523,19 @@ fun EmptyState(selectedTab: LibraryTab, searchQuery: String) {
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                tint = TextSecondary.copy(alpha = 0.3f)
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                color = TextSecondary.copy(alpha = 0.5f)
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
+                color = TextSecondary.copy(alpha = 0.3f)
             )
         }
     }
@@ -553,18 +589,18 @@ fun MiniPlayer(
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .navigationBarsPadding()
     ) {
-        Card(
+        // Glass mini player with strong frost
+        GlassSurface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(72.dp)
-                .clickable(onClick = onClick),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = DarkSurfaceVariant.copy(alpha = 0.95f)
-            ),
-            elevation = CardDefaults.cardElevation(12.dp)
+                .height(76.dp),
+            shape = RoundedCornerShape(22.dp),
+            backgroundColor = GlassSurfaceStrong,
+            borderColor = GlassBorderBright,
+            glowColor = accentColor.copy(alpha = 0.25f)
         ) {
-            Box {
+            Box(modifier = Modifier.clickable(onClick = onClick)) {
+                // Blurred album art background bleed
                 if (song.albumArtUri != null) {
                     AsyncImage(
                         model = song.albumArtUri,
@@ -572,12 +608,12 @@ fun MiniPlayer(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
-                            .blur(30.dp)
-                            .graphicsLayer { alpha = 0.3f }
+                            .blur(50.dp)
+                            .graphicsLayer { alpha = 0.25f }
                     )
                 }
                 
-                // Progress bar
+                // Glowing progress bar at top
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -587,7 +623,7 @@ fun MiniPlayer(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.White.copy(alpha = 0.1f))
+                            .background(Color.White.copy(alpha = 0.08f))
                     )
                     Box(
                         modifier = Modifier
@@ -595,22 +631,33 @@ fun MiniPlayer(
                             .fillMaxHeight()
                             .background(
                                 Brush.horizontalGradient(
-                                    colors = listOf(accentColor, accentColor.copy(alpha = 0.7f))
+                                    colors = listOf(
+                                        accentColor,
+                                        accentColor.copy(alpha = 0.6f)
+                                    )
                                 )
                             )
+                            .graphicsLayer {
+                                shadowElevation = 12f
+                                ambientShadowColor = accentColor
+                                spotShadowColor = accentColor
+                            }
                     )
                 }
 
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Album art with glass border
                     Card(
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.size(52.dp),
-                        elevation = CardDefaults.cardElevation(4.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .size(54.dp)
+                            .border(1.5.dp, GlassBorderBright, RoundedCornerShape(14.dp)),
+                        elevation = CardDefaults.cardElevation(6.dp)
                     ) {
                         if (song.albumArtUri != null) {
                             AsyncImage(
@@ -652,17 +699,16 @@ fun MiniPlayer(
                             style = MaterialTheme.typography.bodySmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = Color.White.copy(alpha = 0.6f)
+                            color = Color.White.copy(alpha = 0.5f)
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(accentColor)
-                            .clickable(onClick = onPlayPause),
-                        contentAlignment = Alignment.Center
+                    // Glass play/pause button with glow
+                    GlassIconButton(
+                        onClick = onPlayPause,
+                        isActive = true,
+                        activeColor = accentColor,
+                        size = 48.dp
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,

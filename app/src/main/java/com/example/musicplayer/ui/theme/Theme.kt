@@ -35,11 +35,11 @@ private val DarkColorScheme = darkColorScheme(
     
     surface = DarkSurface,
     onSurface = TextPrimary,
-    surfaceVariant = DarkSurfaceVariant,
+    surfaceVariant = GlassSurface,
     onSurfaceVariant = TextSecondary,
     
-    outline = TextTertiary,
-    outlineVariant = DarkSurfaceVariant
+    outline = GlassBorder,
+    outlineVariant = GlassBorderBright
 )
 
 private val LightColorScheme = lightColorScheme(

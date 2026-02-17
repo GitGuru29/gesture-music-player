@@ -3,6 +3,7 @@ package com.example.musicplayer.ui
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -46,20 +48,45 @@ fun DownloaderScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF0D0B1A),
+                        DarkBackground,
+                        Color(0xFF08081A),
+                        DarkBackground
+                    )
+                )
+            )
     ) {
+        // Ambient teal glow orb
+        Box(
+            modifier = Modifier
+                .size(280.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 80.dp, y = (-30).dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            AccentSecondary.copy(alpha = 0.08f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Header
+            // Glass header
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                AccentSecondary.copy(alpha = 0.3f),
                                 AccentSecondary.copy(alpha = 0.1f),
+                                AccentSecondary.copy(alpha = 0.03f),
                                 Color.Transparent
                             )
                         )
@@ -72,17 +99,15 @@ fun DownloaderScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
+                        GlassIconButton(
                             onClick = onBack,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(DarkSurfaceVariant)
+                            size = 40.dp
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ArrowBack,
                                 contentDescription = "Back",
-                                tint = TextPrimary
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(16.dp))
@@ -90,10 +115,10 @@ fun DownloaderScreen(
                             Text(
                                 text = "Download Music",
                                 style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onBackground
+                                color = Color.White
                             )
                             Text(
-                                text = "Search and download from YouTube",
+                                text = "Search and download songs",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary
                             )
@@ -102,63 +127,27 @@ fun DownloaderScreen(
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    // Search bar
+                    // Glass search bar + button
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(52.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(DarkSurfaceVariant)
-                                .padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = null,
-                                    tint = TextSecondary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                BasicTextField(
-                                    value = searchText,
-                                    onValueChange = { searchText = it },
-                                    modifier = Modifier.weight(1f),
-                                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                        color = MaterialTheme.colorScheme.onBackground
-                                    ),
-                                    cursorBrush = SolidColor(AccentSecondary),
-                                    singleLine = true,
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                    keyboardActions = KeyboardActions(
-                                        onSearch = {
-                                            if (searchText.isNotBlank()) {
-                                                viewModel.searchYouTube(searchText)
-                                                keyboardController?.hide()
-                                            }
-                                        }
-                                    ),
-                                    decorationBox = { innerTextField ->
-                                        Box {
-                                            if (searchText.isEmpty()) {
-                                                Text(
-                                                    "Search for songs...",
-                                                    style = MaterialTheme.typography.bodyLarge,
-                                                    color = TextSecondary
-                                                )
-                                            }
-                                            innerTextField()
-                                        }
-                                    }
-                                )
+                        GlassSearchBar(
+                            value = searchText,
+                            onValueChange = { searchText = it },
+                            modifier = Modifier.weight(1f),
+                            placeholder = "Search for songs...",
+                            onSearch = {
+                                if (searchText.isNotBlank()) {
+                                    viewModel.searchYouTube(searchText)
+                                    keyboardController?.hide()
+                                }
+                            },
+                            trailingIcon = {
                                 if (searchText.isNotEmpty()) {
                                     IconButton(
-                                        onClick = { 
-                                            searchText = "" 
+                                        onClick = {
+                                            searchText = ""
                                             viewModel.clearYouTubeSearch()
                                         },
                                         modifier = Modifier.size(24.dp)
@@ -172,32 +161,45 @@ fun DownloaderScreen(
                                     }
                                 }
                             }
-                        }
+                        )
                         
                         Spacer(modifier = Modifier.width(12.dp))
                         
-                        Button(
-                            onClick = {
-                                if (searchText.isNotBlank()) {
-                                    viewModel.searchYouTube(searchText)
-                                    keyboardController?.hide()
-                                }
-                            },
-                            enabled = searchText.isNotBlank() && !state.isSearching,
-                            modifier = Modifier.height(52.dp),
+                        // Glass search button
+                        GlassSurface(
+                            modifier = Modifier
+                                .height(52.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable(enabled = searchText.isNotBlank() && !state.isSearching) {
+                                    if (searchText.isNotBlank()) {
+                                        viewModel.searchYouTube(searchText)
+                                        keyboardController?.hide()
+                                    }
+                                },
                             shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = AccentSecondary
-                            )
+                            backgroundColor = if (searchText.isNotBlank()) AccentSecondary.copy(alpha = 0.3f) else GlassSurface,
+                            borderColor = if (searchText.isNotBlank()) AccentSecondary.copy(alpha = 0.5f) else GlassBorder,
+                            glowColor = if (searchText.isNotBlank()) AccentSecondary.copy(alpha = 0.15f) else null
                         ) {
-                            if (state.isSearching) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Text("Search", fontWeight = FontWeight.SemiBold)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 20.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (state.isSearching) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = AccentSecondary,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text(
+                                        "Search",
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (searchText.isNotBlank()) Color.White else TextSecondary
+                                    )
+                                }
                             }
                         }
                     }
@@ -206,7 +208,6 @@ fun DownloaderScreen(
             
             // Results
             if (state.searchResults.isEmpty() && !state.isSearching) {
-                // Empty state
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -218,7 +219,7 @@ fun DownloaderScreen(
                             imageVector = Icons.Default.CloudDownload,
                             contentDescription = null,
                             modifier = Modifier.size(80.dp),
-                            tint = TextSecondary.copy(alpha = 0.5f)
+                            tint = TextSecondary.copy(alpha = 0.25f)
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
@@ -228,9 +229,9 @@ fun DownloaderScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Download songs from YouTube",
+                            text = "Download songs in high quality",
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary.copy(alpha = 0.6f)
+                            color = TextSecondary.copy(alpha = 0.4f)
                         )
                     }
                 }
@@ -250,7 +251,7 @@ fun DownloaderScreen(
             }
         }
         
-        // Download status snackbar
+        // Glass download status card
         AnimatedVisibility(
             visible = state.downloadState !is DownloadState.Idle,
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -277,84 +278,95 @@ fun YouTubeResultItem(
     val isDownloading = downloadState is DownloadState.Downloading && 
                         (downloadState as? DownloadState.Downloading)?.title == result.title
     
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 14.dp, vertical = 5.dp)
     ) {
-        // Thumbnail
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier
-                .width(100.dp)
-                .height(56.dp),
-            elevation = CardDefaults.cardElevation(4.dp)
+        GlassSurface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            backgroundColor = if (isDownloading) AccentSecondary.copy(alpha = 0.1f) else GlassSurfaceDim,
+            borderColor = if (isDownloading) AccentSecondary.copy(alpha = 0.4f) else GlassBorderDim,
+            enableTopHighlight = isDownloading,
+            glowColor = if (isDownloading) GlowSecondary else null
         ) {
-            AsyncImage(
-                model = result.thumbnailUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-        
-        Spacer(modifier = Modifier.width(14.dp))
-        
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = result.title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                color = TextPrimary
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = result.artist,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = TextSecondary,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                Text(
-                    text = " • ${result.duration}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary.copy(alpha = 0.7f)
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.width(12.dp))
-        
-        // Download button
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isDownloading) AccentSecondary.copy(alpha = 0.2f) 
-                    else AccentSecondary
-                )
-                .clickable(enabled = !isDownloading, onClick = onDownload),
-            contentAlignment = Alignment.Center
-        ) {
-            if (isDownloading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = AccentSecondary,
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Download,
-                    contentDescription = "Download",
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Thumbnail with glass border
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .width(100.dp)
+                        .height(56.dp)
+                        .border(1.5.dp, GlassBorder, RoundedCornerShape(12.dp)),
+                    elevation = CardDefaults.cardElevation(6.dp)
+                ) {
+                    AsyncImage(
+                        model = result.thumbnailUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                
+                Spacer(modifier = Modifier.width(14.dp))
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = result.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = result.artist,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = TextSecondary,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Text(
+                            text = " • ${result.duration}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                // Glass download button
+                GlassIconButton(
+                    onClick = onDownload,
+                    isActive = !isDownloading,
+                    activeColor = AccentSecondary,
+                    size = 44.dp
+                ) {
+                    if (isDownloading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = AccentSecondary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -365,29 +377,31 @@ fun DownloadStatusCard(
     downloadState: DownloadState,
     onDismiss: () -> Unit
 ) {
-    val (icon, text, containerColor) = when (downloadState) {
+    val (icon, text, glowColor) = when (downloadState) {
         is DownloadState.Downloading -> Triple(
             Icons.Default.CloudDownload,
             "Downloading: ${downloadState.title}",
-            DarkSurfaceVariant
+            AccentSecondary
         )
         is DownloadState.Success -> Triple(
             Icons.Default.CheckCircle,
             "Downloaded: ${downloadState.title}",
-            Color(0xFF2E7D32)
+            Color(0xFF4CAF50)
         )
         is DownloadState.Error -> Triple(
             Icons.Default.Error,
             "Error: ${downloadState.message}",
-            Color(0xFFC62828)
+            Color(0xFFEF5350)
         )
-        else -> Triple(Icons.Default.Info, "", DarkSurfaceVariant)
+        else -> Triple(Icons.Default.Info, "", AccentSecondary)
     }
     
-    Card(
+    GlassSurface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+        shape = RoundedCornerShape(18.dp),
+        backgroundColor = glowColor.copy(alpha = 0.15f),
+        borderColor = glowColor.copy(alpha = 0.4f),
+        glowColor = glowColor.copy(alpha = 0.2f)
     ) {
         Row(
             modifier = Modifier
@@ -427,7 +441,7 @@ fun DownloadStatusCard(
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Dismiss",
-                        tint = Color.White.copy(alpha = 0.7f)
+                        tint = Color.White.copy(alpha = 0.6f)
                     )
                 }
             }
