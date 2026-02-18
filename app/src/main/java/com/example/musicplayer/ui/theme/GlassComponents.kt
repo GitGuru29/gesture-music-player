@@ -193,6 +193,7 @@ fun GlassPill(
 
     Box(
         modifier = modifier
+            .height(38.dp)
             .then(
                 if (selected) {
                     Modifier.graphicsLayer {
@@ -208,7 +209,8 @@ fun GlassPill(
             .background(bgBrush)
             .border(1.dp, border, RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 10.dp)
+            .padding(horizontal = 18.dp),
+        contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(

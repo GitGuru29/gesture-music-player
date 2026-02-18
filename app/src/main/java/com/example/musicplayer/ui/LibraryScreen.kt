@@ -93,35 +93,32 @@ fun LibraryScreen(
                 )
         )
 
-        // Stacked layout: list fills above, mini player sits below
+        // Stacked layout: header+tabs fixed, list scrolls below, mini player at bottom
         Column(modifier = Modifier.fillMaxSize()) {
+            // Sticky header — stays at top
+            LibraryHeader(
+                songCount = state.playlist.size,
+                isSearchActive = state.isSearchActive,
+                searchQuery = state.searchQuery,
+                onSearchClick = { viewModel.toggleSearch() },
+                onSearchQueryChange = { viewModel.setSearchQuery(it) },
+                onDownloadClick = onNavigateToDownloader
+            )
+            
+            // Sticky tabs — stays below header
+            TabRow(
+                selectedTab = state.selectedTab,
+                onTabSelected = { viewModel.selectTab(it) },
+                favoritesCount = state.favoriteIds.size
+            )
+
+            // Scrollable song list
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                // Header with search
-                item {
-                    LibraryHeader(
-                        songCount = state.playlist.size,
-                        isSearchActive = state.isSearchActive,
-                        searchQuery = state.searchQuery,
-                        onSearchClick = { viewModel.toggleSearch() },
-                        onSearchQueryChange = { viewModel.setSearchQuery(it) },
-                        onDownloadClick = onNavigateToDownloader
-                    )
-                }
-                
-                // Tabs
-                item {
-                    TabRow(
-                        selectedTab = state.selectedTab,
-                        onTabSelected = { viewModel.selectTab(it) },
-                        favoritesCount = state.favoriteIds.size
-                    )
-                }
-
                 // Song list
                 itemsIndexed(
                     items = filteredPlaylist,
@@ -186,131 +183,189 @@ fun LibraryHeader(
         }
     }
     
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        AccentPrimary.copy(alpha = 0.12f),
-                        AccentSecondary.copy(alpha = 0.04f),
-                        Color.Transparent
+            .statusBarsPadding()
+    ) {
+        // Accent shimmer line at very top
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(2.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            AccentPrimary.copy(alpha = 0.5f),
+                            AccentSecondary.copy(alpha = 0.5f),
+                            Color.Transparent
+                        )
                     )
                 )
-            )
-            .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-    ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        )
+
+        // Frosted glass header card
+        GlassSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            shape = RoundedCornerShape(20.dp),
+            backgroundColor = GlassSurfaceStrong,
+            borderColor = GlassBorderBright,
+            borderWidth = 1.dp,
+            enableTopHighlight = true,
+            glowColor = AccentPrimary.copy(alpha = 0.06f)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp)
             ) {
-                if (!isSearchActive) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "My Music",
-                            style = MaterialTheme.typography.headlineLarge,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "$songCount songs",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary
-                        )
-                    }
-                } else {
-                    // Glass search bar
-                    GlassSurface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(24.dp),
-                        backgroundColor = GlassSurfaceStrong,
-                        borderColor = GlassBorderBright
-                    ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!isSearchActive) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = AccentSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            BasicTextField(
-                                value = searchQuery,
-                                onValueChange = onSearchQueryChange,
+                            // Gradient accent music icon
+                            Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .focusRequester(focusRequester),
-                                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                    color = Color.White
-                                ),
-                                cursorBrush = SolidColor(AccentPrimary),
-                                singleLine = true,
-                                decorationBox = { innerTextField ->
-                                    Box {
-                                        if (searchQuery.isEmpty()) {
-                                            Text(
-                                                "Search songs...",
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                color = TextSecondary.copy(alpha = 0.5f)
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(
+                                                AccentPrimary.copy(alpha = 0.6f),
+                                                AccentSecondary.copy(alpha = 0.4f)
                                             )
-                                        }
-                                        innerTextField()
-                                    }
-                                }
-                            )
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(
-                                    onClick = { onSearchQueryChange("") },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = "Clear",
-                                        tint = TextSecondary,
-                                        modifier = Modifier.size(18.dp)
+                                        )
                                     )
+                                    .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MusicNote,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.width(14.dp))
+                            
+                            Column {
+                                Text(
+                                    text = "My Music",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "$songCount songs",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    } else {
+                        // Glass inline search bar
+                        GlassSurface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RoundedCornerShape(22.dp),
+                            backgroundColor = GlassSurface,
+                            borderColor = AccentSecondary.copy(alpha = 0.4f),
+                            enableTopHighlight = false,
+                            glowColor = AccentSecondary.copy(alpha = 0.08f)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = AccentSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                BasicTextField(
+                                    value = searchQuery,
+                                    onValueChange = onSearchQueryChange,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(focusRequester),
+                                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                        color = Color.White
+                                    ),
+                                    cursorBrush = SolidColor(AccentPrimary),
+                                    singleLine = true,
+                                    decorationBox = { innerTextField ->
+                                        Box {
+                                            if (searchQuery.isEmpty()) {
+                                                Text(
+                                                    "Search songs...",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = TextSecondary.copy(alpha = 0.5f)
+                                                )
+                                            }
+                                            innerTextField()
+                                        }
+                                    }
+                                )
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = { onSearchQueryChange("") },
+                                        modifier = Modifier.size(22.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            tint = TextSecondary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                
-                Spacer(modifier = Modifier.width(8.dp))
-                
-                // Glass search toggle button
-                GlassIconButton(
-                    onClick = onSearchClick,
-                    isActive = isSearchActive,
-                    activeColor = AccentPrimary
-                ) {
-                    Icon(
-                        imageVector = if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = if (isSearchActive) Color.White else TextSecondary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-                
-                Spacer(modifier = Modifier.width(8.dp))
-                
-                // Glass download button
-                GlassIconButton(onClick = onDownloadClick) {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = "Download",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(22.dp)
-                    )
+                    
+                    Spacer(modifier = Modifier.width(10.dp))
+                    
+                    // Action buttons row
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassIconButton(
+                            onClick = onSearchClick,
+                            isActive = isSearchActive,
+                            activeColor = AccentSecondary,
+                            size = 40.dp
+                        ) {
+                            Icon(
+                                imageVector = if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
+                                contentDescription = "Search",
+                                tint = if (isSearchActive) Color.White else TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        
+                        GlassIconButton(
+                            onClick = onDownloadClick,
+                            size = 40.dp
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
